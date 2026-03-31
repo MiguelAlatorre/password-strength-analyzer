@@ -1,6 +1,5 @@
 import re
 import os
-import sys
 import hashlib
 import urllib.request
 import getpass
@@ -12,7 +11,6 @@ FALLBACK_PASSWORDS = {
     "letmein", "shadow", "superman", "michael", "football"
 }
 
-# Colors
 RED    = "\033[91m"
 YELLOW = "\033[93m"
 GREEN  = "\033[92m"
@@ -50,7 +48,7 @@ def check_hibp(password):
                 return int(count)
         return 0
     except Exception:
-        return None  # None means API was unreachable
+        return None
 
 def color_check(passed, label):
     if passed:
@@ -77,14 +75,10 @@ def estimate_crack_time(password):
     if re.search(r'[A-Z]', password): charset += 26
     if re.search(r'[0-9]', password): charset += 10
     if re.search(r'[^a-zA-Z0-9]', password): charset += 32
-
     if charset == 0:
         return "instantly", RED
-
     combinations = charset ** len(password)
-    guesses_per_second = 1_000_000_000
-    seconds = combinations / guesses_per_second
-
+    seconds = combinations / 1_000_000_000
     if seconds < 1:
         return "less than a second", RED
     elif seconds < 60:
@@ -113,10 +107,10 @@ def analyze_password(password, wordlist):
         return
 
     # HIBP check
-    print(f"  {GRAY}Checking breach database...{RESET}", end="\r")
+    print(f"  {GRAY}Checking breach database...{RESET}", end="\r", flush=True)
     breach_count = check_hibp(password)
     if breach_count is None:
-        print(f"  {YELLOW}HIBP API unreachable - skipping breach check{RESET}     ")
+        breach_line = f"  {YELLOW}\u26a0 HIBP API unreachable - breach check skipped{RESET}"
     elif breach_count > 0:
         print(f"  {RED}[!] Found in {breach_count:,} real data breaches.{RESET}          ")
         print(f"\n  Rating : {RED}COMPROMISED{RESET}")
@@ -125,8 +119,9 @@ def analyze_password(password, wordlist):
         print()
         return
     else:
-        print(f"  {GREEN}Not found in any known breach{RESET}                      ")
+        breach_line = f"  {GREEN}\u2714 Not found in any known data breach{RESET}              "
 
+    # Scoring
     score = 0
     length = len(password)
 
@@ -168,12 +163,14 @@ def analyze_password(password, wordlist):
 
     crack_time, time_color = estimate_crack_time(password)
 
+    # Output — breach line sits naturally with the results
     print(f"\n  Rating : {rating_color}{BOLD}{rating}{RESET}")
     print(f"  Score  :{score_bar(score)}")
     print(f"  Length : {length} characters")
     print(f"  Crack  : Estimated {time_color}{crack_time}{RESET} to brute-force")
+    print(f"  Breach : {breach_line.strip()}")
 
-    all_basic = has_lower and has_upper and has_digit and has_special and has_no_repeat and has_no_seq
+    # Breakdown
     print(f"\n  Breakdown:")
     print(color_check(has_lower,      "Lowercase letters"))
     print(color_check(has_upper,      "Uppercase letters"))
@@ -184,14 +181,17 @@ def analyze_password(password, wordlist):
     print(color_check(is_very_long,   "20+ characters (bonus)"))
     print(color_check(is_high_entropy,"High character variety (bonus)"))
 
-    if all_basic and score < 10:
+    # Tips — show for any failing check when score under 10
+    if score < 10:
         tips = []
-        if not is_very_long:
-            tips.append("20+ characters")
-        if not is_high_entropy:
-            tips.append("more unique characters")
+        if not has_lower:     tips.append("lowercase letters")
+        if not has_upper:     tips.append("uppercase letters")
+        if not has_digit:     tips.append("numbers")
+        if not has_special:   tips.append("special characters")
+        if not is_very_long:  tips.append("20+ characters")
+        if not is_high_entropy: tips.append("more unique characters")
         if tips:
-            print(f"\n  {YELLOW}Tip: Add {' and '.join(tips)} to reach 10/10{RESET}")
+            print(f"\n  {YELLOW}Tip: Add {', '.join(tips[:-1])} and {tips[-1]}{RESET}" if len(tips) > 1 else f"\n  {YELLOW}Tip: Add {tips[0]} to improve your score{RESET}")
     print()
 
 def main():
@@ -207,7 +207,6 @@ def main():
     while True:
         print()
         password = getpass.getpass("  Enter password (hidden): ")
-
         if not password:
             print(f"  {YELLOW}No password entered. Try again.{RESET}")
             continue
