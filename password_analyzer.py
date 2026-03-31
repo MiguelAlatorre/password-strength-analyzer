@@ -34,7 +34,7 @@ def score_bar(score, max_score=10):
         bar_color = GREEN
     else:
         bar_color = CYAN
-    return f"  [{bar_color}{'█' * filled}{GRAY}{'░' * empty}{RESET}] {score}/{max_score}"
+    return f"  [{bar_color}{'#' * filled}{GRAY}{'.' * empty}{RESET}] {score}/{max_score}"
 
 def estimate_crack_time(password):
     charset = 0
@@ -68,19 +68,18 @@ def estimate_crack_time(password):
 def analyze_password(password):
     print()
 
-    # Common password check
     if password.lower() in COMMON_PASSWORDS:
         print(f"  {RED}[!] This password is on every hacker's list.{RESET}")
         print(f"\n  Rating : {RED}TERRIBLE{RESET}")
         print(f"  Score  :{score_bar(0)}")
-        print(f"  Crack  : {RED}instantly{RESET} — no brute force needed")
+        print(f"  Crack  : {RED}instantly{RESET} - no brute force needed")
         print()
         return
 
     score = 0
     length = len(password)
 
-    # Length
+    # Length scoring
     if length >= 16:
         score += 3
     elif length >= 12:
@@ -89,19 +88,23 @@ def analyze_password(password):
         score += 1
 
     # Character checks
-    has_lower   = bool(re.search(r'[a-z]', password))
-    has_upper   = bool(re.search(r'[A-Z]', password))
-    has_digit   = bool(re.search(r'[0-9]', password))
-    has_special = bool(re.search(r'[^a-zA-Z0-9]', password))
+    has_lower     = bool(re.search(r'[a-z]', password))
+    has_upper     = bool(re.search(r'[A-Z]', password))
+    has_digit     = bool(re.search(r'[0-9]', password))
+    has_special   = bool(re.search(r'[^a-zA-Z0-9]', password))
     has_no_repeat = not bool(re.search(r'(.)\1{2,}', password))
     has_no_seq    = not bool(re.search(r'(012|123|234|345|456|567|678|789|abc|bcd|cde|qwe|wer)', password.lower()))
+    is_very_long    = length >= 20
+    is_high_entropy = len(set(password)) >= int(length * 0.75)
 
-    if has_lower:   score += 1
-    if has_upper:   score += 1
-    if has_digit:   score += 1
-    if has_special: score += 2
+    if has_lower:         score += 1
+    if has_upper:         score += 1
+    if has_digit:         score += 1
+    if has_special:       score += 2
     if not has_no_repeat: score -= 1
     if not has_no_seq:    score -= 1
+    if is_very_long:      score += 1
+    if is_high_entropy:   score += 1
 
     score = max(0, min(score, 10))
 
@@ -117,14 +120,13 @@ def analyze_password(password):
 
     crack_time, time_color = estimate_crack_time(password)
 
-    # Output
     print(f"  Rating : {rating_color}{BOLD}{rating}{RESET}")
     print(f"  Score  :{score_bar(score)}")
     print(f"  Length : {length} characters")
     print(f"  Crack  : Estimated {time_color}{crack_time}{RESET} to brute-force")
 
-    # Character breakdown
-    all_checks = has_lower and has_upper and has_digit and has_special and has_no_repeat and has_no_seq
+    # Breakdown
+    all_basic = has_lower and has_upper and has_digit and has_special and has_no_repeat and has_no_seq
     print(f"\n  Breakdown:")
     print(color_check(has_lower,      "Lowercase letters"))
     print(color_check(has_upper,      "Uppercase letters"))
@@ -132,24 +134,26 @@ def analyze_password(password):
     print(color_check(has_special,    "Special characters"))
     print(color_check(has_no_repeat,  "No repeated characters"))
     print(color_check(has_no_seq,     "No sequential patterns"))
+    print(color_check(is_very_long,   "20+ characters (bonus)"))
+    print(color_check(is_high_entropy,"High character variety (bonus)"))
 
-    # Hint when all checks pass but score isn't maxed
-    if all_checks and score <=6:
-        if length < 12:
-            hint = f"Increase length to 12+ characters to reach VERY STRONG"
-        elif length < 16:
-            hint = f"Increase length to 16+ characters to reach VERY STRONG"
-        else:
-            hint = f"Looking great — small tweaks to length could push you higher"
-        print(f"\n  {YELLOW}↑ Tip: {hint}{RESET}")
+    # Tip only when not already maxed
+    if all_basic and score < 10:
+        tips = []
+        if not is_very_long:
+            tips.append("20+ characters")
+        if not is_high_entropy:
+            tips.append("more unique characters")
+        if tips:
+            print(f"\n  {YELLOW}Up Tip: Add {' and '.join(tips)} to reach 10/10{RESET}")
     print()
 
 def main():
     print()
-    print(f"  {CYAN}{'═' * 41}{RESET}")
+    print(f"  {CYAN}{'=' * 41}{RESET}")
     print(f"  {BOLD}     PASSWORD STRENGTH ANALYZER{RESET}")
     print(f"  {GRAY}     github.com/MiguelAlatorre{RESET}")
-    print(f"  {CYAN}{'═' * 41}{RESET}")
+    print(f"  {CYAN}{'=' * 41}{RESET}")
 
     while True:
         print()
@@ -161,7 +165,7 @@ def main():
 
         analyze_password(password)
 
-        print(f"  {GRAY}{'─' * 41}{RESET}")
+        print(f"  {GRAY}{'-' * 41}{RESET}")
         again = input(f"\n  Analyze another? (y/n): ").strip().lower()
         if again != 'y':
             print(f"\n  {CYAN}Stay secure out there.{RESET}\n")
