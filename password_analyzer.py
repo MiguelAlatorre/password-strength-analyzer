@@ -1,5 +1,8 @@
 import re
 import os
+import sys
+import hashlib
+import urllib.request
 import getpass
 
 FALLBACK_PASSWORDS = {
@@ -26,12 +29,28 @@ def load_wordlist():
         try:
             with open(wordlist_path, "r", encoding="latin-1") as f:
                 words = {line.strip().lower() for line in f if line.strip()}
-            print(f"  {GREEN}Wordlist loaded — {len(words):,} known passwords{RESET}     ")
+            print(f"  {GREEN}Wordlist loaded: {len(words):,} known passwords{RESET}     ")
             return words
         except Exception:
             pass
-    print(f"  {YELLOW}rockyou.txt not found — using fallback list{RESET}")
+    print(f"  {YELLOW}rockyou.txt not found - using fallback list{RESET}")
     return FALLBACK_PASSWORDS
+
+def check_hibp(password):
+    sha1 = hashlib.sha1(password.encode("utf-8")).hexdigest().upper()
+    prefix, suffix = sha1[:5], sha1[5:]
+    try:
+        url = f"https://api.pwnedpasswords.com/range/{prefix}"
+        req = urllib.request.Request(url, headers={"User-Agent": "PasswordAnalyzer/1.0"})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            hashes = response.read().decode("utf-8")
+        for line in hashes.splitlines():
+            h, count = line.split(":")
+            if h == suffix:
+                return int(count)
+        return 0
+    except Exception:
+        return None  # None means API was unreachable
 
 def color_check(passed, label):
     if passed:
@@ -50,7 +69,7 @@ def score_bar(score, max_score=10):
         bar_color = GREEN
     else:
         bar_color = CYAN
-    return f"  [{bar_color}{'\u2588' * filled}{GRAY}{'\u2591' * empty}{RESET}] {score}/{max_score}"
+    return f"  [{bar_color}{chr(9608) * filled}{GRAY}{chr(9617) * empty}{RESET}] {score}/{max_score}"
 
 def estimate_crack_time(password):
     charset = 0
@@ -84,13 +103,29 @@ def estimate_crack_time(password):
 def analyze_password(password, wordlist):
     print()
 
+    # Wordlist check
     if password.lower() in wordlist:
-        print(f"  {RED}[!] This password appears in a real-world breach list.{RESET}")
+        print(f"  {RED}[!] Found in breach wordlist - hackers will try this first.{RESET}")
         print(f"\n  Rating : {RED}TERRIBLE{RESET}")
         print(f"  Score  :{score_bar(0)}")
         print(f"  Crack  : {RED}instantly{RESET} - it's in every hacker's dictionary")
         print()
         return
+
+    # HIBP check
+    print(f"  {GRAY}Checking breach database...{RESET}", end="\r")
+    breach_count = check_hibp(password)
+    if breach_count is None:
+        print(f"  {YELLOW}HIBP API unreachable - skipping breach check{RESET}     ")
+    elif breach_count > 0:
+        print(f"  {RED}[!] Found in {breach_count:,} real data breaches.{RESET}          ")
+        print(f"\n  Rating : {RED}COMPROMISED{RESET}")
+        print(f"  Score  :{score_bar(0)}")
+        print(f"  Crack  : {RED}instantly{RESET} - attackers already have this password")
+        print()
+        return
+    else:
+        print(f"  {GREEN}Not found in any known breach{RESET}                      ")
 
     score = 0
     length = len(password)
@@ -133,7 +168,7 @@ def analyze_password(password, wordlist):
 
     crack_time, time_color = estimate_crack_time(password)
 
-    print(f"  Rating : {rating_color}{BOLD}{rating}{RESET}")
+    print(f"\n  Rating : {rating_color}{BOLD}{rating}{RESET}")
     print(f"  Score  :{score_bar(score)}")
     print(f"  Length : {length} characters")
     print(f"  Crack  : Estimated {time_color}{crack_time}{RESET} to brute-force")
