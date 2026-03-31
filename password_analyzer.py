@@ -1,12 +1,13 @@
 import re
+import os
 import getpass
 
-COMMON_PASSWORDS = [
+FALLBACK_PASSWORDS = {
     "password", "123456", "123456789", "qwerty", "abc123",
     "password1", "111111", "iloveyou", "admin", "welcome",
     "monkey", "dragon", "master", "sunshine", "princess",
     "letmein", "shadow", "superman", "michael", "football"
-]
+}
 
 # Colors
 RED    = "\033[91m"
@@ -17,11 +18,26 @@ GRAY   = "\033[90m"
 BOLD   = "\033[1m"
 RESET  = "\033[0m"
 
+def load_wordlist():
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    wordlist_path = os.path.join(script_dir, "rockyou.txt")
+    if os.path.exists(wordlist_path):
+        print(f"  {GRAY}Loading wordlist...{RESET}", end="\r")
+        try:
+            with open(wordlist_path, "r", encoding="latin-1") as f:
+                words = {line.strip().lower() for line in f if line.strip()}
+            print(f"  {GREEN}Wordlist loaded — {len(words):,} known passwords{RESET}     ")
+            return words
+        except Exception:
+            pass
+    print(f"  {YELLOW}rockyou.txt not found — using fallback list{RESET}")
+    return FALLBACK_PASSWORDS
+
 def color_check(passed, label):
     if passed:
-        return f"  {GREEN}✔{RESET} {label}"
+        return f"  {GREEN}\u2714{RESET} {label}"
     else:
-        return f"  {RED}✘{RESET} {label}"
+        return f"  {RED}\u2718{RESET} {label}"
 
 def score_bar(score, max_score=10):
     filled = round((score / max_score) * 20)
@@ -34,7 +50,7 @@ def score_bar(score, max_score=10):
         bar_color = GREEN
     else:
         bar_color = CYAN
-    return f"  [{bar_color}{'#' * filled}{GRAY}{'.' * empty}{RESET}] {score}/{max_score}"
+    return f"  [{bar_color}{'\u2588' * filled}{GRAY}{'\u2591' * empty}{RESET}] {score}/{max_score}"
 
 def estimate_crack_time(password):
     charset = 0
@@ -65,21 +81,20 @@ def estimate_crack_time(password):
     else:
         return "centuries", CYAN
 
-def analyze_password(password):
+def analyze_password(password, wordlist):
     print()
 
-    if password.lower() in COMMON_PASSWORDS:
-        print(f"  {RED}[!] This password is on every hacker's list.{RESET}")
+    if password.lower() in wordlist:
+        print(f"  {RED}[!] This password appears in a real-world breach list.{RESET}")
         print(f"\n  Rating : {RED}TERRIBLE{RESET}")
         print(f"  Score  :{score_bar(0)}")
-        print(f"  Crack  : {RED}instantly{RESET} - no brute force needed")
+        print(f"  Crack  : {RED}instantly{RESET} - it's in every hacker's dictionary")
         print()
         return
 
     score = 0
     length = len(password)
 
-    # Length scoring
     if length >= 16:
         score += 3
     elif length >= 12:
@@ -87,7 +102,6 @@ def analyze_password(password):
     elif length >= 8:
         score += 1
 
-    # Character checks
     has_lower     = bool(re.search(r'[a-z]', password))
     has_upper     = bool(re.search(r'[A-Z]', password))
     has_digit     = bool(re.search(r'[0-9]', password))
@@ -108,7 +122,6 @@ def analyze_password(password):
 
     score = max(0, min(score, 10))
 
-    # Rating
     if score <= 2:
         rating, rating_color = "WEAK", RED
     elif score <= 4:
@@ -125,7 +138,6 @@ def analyze_password(password):
     print(f"  Length : {length} characters")
     print(f"  Crack  : Estimated {time_color}{crack_time}{RESET} to brute-force")
 
-    # Breakdown
     all_basic = has_lower and has_upper and has_digit and has_special and has_no_repeat and has_no_seq
     print(f"\n  Breakdown:")
     print(color_check(has_lower,      "Lowercase letters"))
@@ -137,7 +149,6 @@ def analyze_password(password):
     print(color_check(is_very_long,   "20+ characters (bonus)"))
     print(color_check(is_high_entropy,"High character variety (bonus)"))
 
-    # Tip only when not already maxed
     if all_basic and score < 10:
         tips = []
         if not is_very_long:
@@ -145,7 +156,7 @@ def analyze_password(password):
         if not is_high_entropy:
             tips.append("more unique characters")
         if tips:
-            print(f"\n  {YELLOW}Up Tip: Add {' and '.join(tips)} to reach 10/10{RESET}")
+            print(f"\n  {YELLOW}Tip: Add {' and '.join(tips)} to reach 10/10{RESET}")
     print()
 
 def main():
@@ -154,6 +165,9 @@ def main():
     print(f"  {BOLD}     PASSWORD STRENGTH ANALYZER{RESET}")
     print(f"  {GRAY}     github.com/MiguelAlatorre{RESET}")
     print(f"  {CYAN}{'=' * 41}{RESET}")
+    print()
+
+    wordlist = load_wordlist()
 
     while True:
         print()
@@ -163,7 +177,7 @@ def main():
             print(f"  {YELLOW}No password entered. Try again.{RESET}")
             continue
 
-        analyze_password(password)
+        analyze_password(password, wordlist)
 
         print(f"  {GRAY}{'-' * 41}{RESET}")
         again = input(f"\n  Analyze another? (y/n): ").strip().lower()
