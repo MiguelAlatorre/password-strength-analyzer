@@ -124,6 +124,7 @@ def analyze_password(password):
     print(f"  Crack  : Estimated {time_color}{crack_time}{RESET} to brute-force")
 
     # Character breakdown
+    all_checks = has_lower and has_upper and has_digit and has_special and has_no_repeat and has_no_seq
     print(f"\n  Breakdown:")
     print(color_check(has_lower,      "Lowercase letters"))
     print(color_check(has_upper,      "Uppercase letters"))
@@ -131,6 +132,16 @@ def analyze_password(password):
     print(color_check(has_special,    "Special characters"))
     print(color_check(has_no_repeat,  "No repeated characters"))
     print(color_check(has_no_seq,     "No sequential patterns"))
+
+    # Hint when all checks pass but score isn't maxed
+    if all_checks and score <=6:
+        if length < 12:
+            hint = f"Increase length to 12+ characters to reach VERY STRONG"
+        elif length < 16:
+            hint = f"Increase length to 16+ characters to reach VERY STRONG"
+        else:
+            hint = f"Looking great — small tweaks to length could push you higher"
+        print(f"\n  {YELLOW}↑ Tip: {hint}{RESET}")
     print()
 
 def main():
